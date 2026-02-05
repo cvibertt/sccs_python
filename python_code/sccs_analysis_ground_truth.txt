@@ -1,0 +1,105 @@
+library(SCCS)
+
+apdat <- apdat[, c("case", "sta", "end", "stro", "ap", "endap", "cen", "dem")]
+
+# First, identify unique cases
+unique_cases <- unique(apdat$case)
+n_unique <- length(unique_cases)
+
+# Generate demographic data for unique cases only
+set.seed(123)  # For reproducibility
+
+# Generate data for new columns (one value per unique case)
+age_at_first_antipsych <- round(runif(n_unique, min=30, max=80), 1)
+weight <- round(rnorm(n_unique, mean=90, sd=10), 1)
+height <- round(rnorm(n_unique, mean=160, sd=30), 0)
+income_level <- sample(1:3, n_unique, replace=TRUE)
+
+# Generate random ethnicity strings
+ethnicity_options <- c("white", "black", "latin american", "asian")
+ethnicity <- sample(ethnicity_options, n_unique, replace = TRUE)
+
+# Add five stroke-relevant demographic variables
+set.seed(456)  # Different seed for stroke variables
+
+hypertension <- sample(0:1, n_unique, replace = TRUE, prob = c(0.7, 0.3))
+diabetes <- sample(0:1, n_unique, replace = TRUE, prob = c(0.8, 0.2))
+smoking_status <- sample(0:2, n_unique, replace = TRUE, prob = c(0.6, 0.25, 0.15))
+family_hx_stroke <- sample(0:1, n_unique, replace = TRUE, prob = c(0.75, 0.25))
+atrial_fib <- sample(0:1, n_unique, replace = TRUE, prob = c(0.85, 0.15))
+
+# Create a data frame with demographics for unique cases
+demo_df <- data.frame(
+  case = unique_cases,
+  age_at_first_antipsych = age_at_first_antipsych,
+  weight = weight,
+  height = height,
+  ethnicity = ethnicity,
+  income_level = income_level,
+  hypertension = hypertension,
+  diabetes = diabetes,
+  smoking_status = smoking_status,
+  family_hx_stroke = family_hx_stroke,
+  atrial_fib = atrial_fib
+)
+
+# Merge demographics back to apdat based on case ID
+apdat <- merge(apdat, demo_df, by = "case", all.x = TRUE)
+
+# Sort by case to maintain original order (optional)
+apdat <- apdat[order(apdat$case), ]
+
+# View the updated dataset
+head(apdat, 15)
+
+setwd("C:/Users/14383/Desktop/xAI/tutor io scenario/04_SCCS Analysis")
+write.csv(apdat, "apdat.csv", row.names = FALSE)
+
+agedem <- floor(seq(70, 95, 5)*365.25)
+
+ap.mod1 <- standardsccs(event ~ ap + age, 
+                        indiv=case, 
+                        astart=sta, 
+                        aend=end, 
+                        aevent=stro,
+                        adrug=ap,
+                        aedrug=endap,
+                        washout=c(1,92,182),
+                        agegrp=agedem,
+                        data=apdat)
+
+# > ap.mod1
+# Call:
+#   coxph(formula = Surv(rep(1, 38299L), event) ~ ap + age + strata(indivL) + 
+#           offset(log(interval)), data = chopdat, method = "exact")
+# 
+# n= 38299, number of events= 2000 
+# 
+# coef exp(coef)  se(coef)      z Pr(>|z|)    
+# ap1    0.57008   1.76841   0.07276  7.835 4.68e-15 ***
+#   ap2    0.56654   1.76215   0.07862  7.206 5.75e-13 ***
+#   ap3    0.25597   1.29172   0.12278  2.085   0.0371 *  
+#   age2   0.58725   1.79904   0.15079  3.894 9.84e-05 ***
+#   age3   1.20411   3.33379   0.18647  6.458 1.06e-10 ***
+#   age4   2.14577   8.54861   0.21462  9.998  < 2e-16 ***
+#   age5   3.22177  25.07250   0.24293 13.262  < 2e-16 ***
+#   age6   3.98956  54.03123   0.27767 14.368  < 2e-16 ***
+#   age7   5.18373 178.34668   0.39225 13.215  < 2e-16 ***
+#   ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# exp(coef) exp(-coef) lower .95 upper .95
+# ap1      1.768   0.565480     1.533     2.039
+# ap2      1.762   0.567488     1.511     2.056
+# ap3      1.292   0.774164     1.015     1.643
+# age2     1.799   0.555851     1.339     2.418
+# age3     3.334   0.299958     2.313     4.805
+# age4     8.549   0.116978     5.613    13.019
+# age5    25.073   0.039884    15.575    40.363
+# age6    54.031   0.018508    31.354    93.110
+# age7   178.347   0.005607    82.676   384.726
+# 
+# Concordance= 0.797  (se = 0.008 )
+# Likelihood ratio test= 427.1  on 9 df,   p=<2e-16
+# Wald test            = 412.1  on 9 df,   p=<2e-16
+# Score (logrank) test = 438.2  on 9 df,   p=<2e-16
