@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from adrug_matrix import adrug_matrix
+from .adrug_matrix import adrug_matrix
 
 def formatdata(indiv, astart, aend, aevent, adrug, aedrug, expogrp=None, washout=None, 
                sameexpopar=None, agegrp=None, seasongrp=None, dob=None, cov=None, 
@@ -146,6 +146,11 @@ def formatdata(indiv, astart, aend, aevent, adrug, aedrug, expogrp=None, washout
     ind, cutp, eventday = ind[sort_idx], cutp[sort_idx], eventday[sort_idx]
     
     interval = np.concatenate([[0], np.diff(cutp)])
+    # Reset interval at individual boundaries to avoid negative diffs
+    boundary_mask = np.concatenate([[True], ind[1:] != ind[:-1]])
+    interval[boundary_mask] = 0
+    # Guard against any remaining negative values
+    interval[interval < 0] = 0
     interval[cutp <= data1['astart'].iloc[ind - 1].values] = 0
     interval[cutp > data1['aend'].iloc[ind - 1].values] = 0
     

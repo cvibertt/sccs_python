@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-from formatdata import formatdata
+from .formatdata import formatdata
 
 def standardsccs(formula, indiv, astart, aend, aevent, adrug, aedrug, expogrp=None, washout=None, 
                  sameexpopar=None, agegrp=None, seasongrp=None, dob=None, dataformat="stack", data=None):
@@ -32,11 +32,14 @@ def standardsccs(formula, indiv, astart, aend, aevent, adrug, aedrug, expogrp=No
     
     # Fit conditional logistic regression
     from patsy import dmatrix
-    from clogit import fit_clogit
+    from .clogit import fit_clogit
     
-    # Create design matrix
-    X = dmatrix(formula, chopdat, return_type='matrix')
-    coef_names = X.design_info.column_names
+    # Create design matrix (drop global intercept for identifiability)
+    X = dmatrix(formula, chopdat, return_type='dataframe')
+    if 'Intercept' in X.columns:
+        X = X.drop(columns=['Intercept'])
+    coef_names = X.columns.tolist()
+    X = X.values
     y = chopdat['event'].values.astype(int)
     strata = pd.Categorical(chopdat['indivL']).codes
     offset = np.log(np.maximum(chopdat['interval'].values, 1e-10))  # Add offset like R, avoid log(0)

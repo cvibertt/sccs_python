@@ -17,7 +17,7 @@ Usage:
 
 import numpy as np
 import pandas as pd
-from python.standardsccs import standardsccs
+from python_sccs.standardsccs import standardsccs
 
 def main():
     print("Loading apdat.csv...")
@@ -37,14 +37,14 @@ def main():
 
     # Run SCCS analysis with exact Hessian
     print("\nRunning SCCS analysis with exact Hessian...")
-    print("Formula: ~ ap1 + ap2 + ap3 + age")
+    print("Formula: drug_0 + age")
     print("Exposure groups: [0, 1, 2]")
     print("Washout: [1, 92, 182]")
     print("Age groups:", agedem)
 
     try:
         result = standardsccs(
-            formula=' ~ ap1 + ap2 + ap3 + age',
+            formula='drug_0 + age',
             indiv='case',
             astart='sta',
             aend='end',

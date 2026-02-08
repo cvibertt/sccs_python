@@ -43,11 +43,15 @@ def nonparasccs(indiv, astart, aend, aevent, adrug, aedrug, kn1=12, kn2=12, sp1=
     timesincevacwithinexpo = data4.loc[data4['expostatus'] == 1, 'timesincevac'].values
     timesincevacwithinexpo = np.concatenate([timesincevacwithinexpo, [0, data4['risklen'].max() + 0.00001]])
     knots1ex = np.linspace(timesincevacwithinexpo.min(), timesincevacwithinexpo.max(), kn2)
+
+    # Determine basis sizes from spline design matrices
+    n_basis_age = dmsplinedesign(np.array([fdata['startob'].min()]), knots1, 4).shape[1]
+    n_basis_exp = dmsplinedesign(np.array([0.0]), knots1ex, 4).shape[1]
     
     # Optimization
     def neg_ll(params):
-        beta_age = params[:kn1]
-        beta_exp = params[kn1:kn1+kn2]
+        beta_age = params[:n_basis_age]
+        beta_exp = params[n_basis_age:n_basis_age + n_basis_exp]
         ll = 0
         for idx, row in fdata.iterrows():
             startob = row['startob']
@@ -83,7 +87,7 @@ def nonparasccs(indiv, astart, aend, aevent, adrug, aedrug, kn1=12, kn2=12, sp1=
         
         return -ll  # negative log likelihood
     
-    initial_params = np.zeros(kn1 + kn2)
+    initial_params = np.zeros(n_basis_age + n_basis_exp)
     result = minimize(neg_ll, initial_params, method='L-BFGS-B')
     
     # Return fitted parameters or summary

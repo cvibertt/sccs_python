@@ -5,7 +5,7 @@ Run SCCS analysis on apdat.csv with exact Hessian, matching R's call.
 
 import numpy as np
 import pandas as pd
-from python.standardsccs import standardsccs
+from python_sccs.standardsccs import standardsccs
 
 # Load data
 print("Loading apdat.csv...")
@@ -22,7 +22,7 @@ print("Age groups (agedem):", agedem)
 # Run standardsccs matching R's call
 print("\nRunning SCCS analysis with exact Hessian...")
 result = standardsccs(
-    formula=' ~ ap1 + ap2 + ap3 + age',
+    formula='drug_0 + age',
     indiv='case',
     astart='sta',
     aend='end',

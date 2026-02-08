@@ -192,7 +192,9 @@ def exact_score_hessian(beta, X, y, strata, offset=None):
         if not event_mask.any():
             continue
         linpred = X_s @ beta + off_s
-        score = np.exp(linpred)
+        # Stabilize probabilities using a max-shifted softmax
+        max_lp = np.max(linpred)
+        score = np.exp(linpred - max_lp)
         d0 = score.sum()
         prob = score / d0
         for j in range(nvar):
@@ -228,30 +230,57 @@ def fit_clogit(X, y, strata, offset=None, initial_beta=None, exact_hessian=False
         initial_beta = np.zeros(X.shape[1])
     
     if exact_hessian:
-        # Newton-Raphson with exact Hessian
+        # Newton-Raphson with exact Hessian + damping and fallback
         beta = initial_beta.copy()
         maxiter = 100
         eps = 1e-8
+        success = False
+        message = "Exact Newton-Raphson did not converge"
+        hess_inv = None
+        ll_model_fun = conditional_loglik(beta, X, y, strata, offset)
         for _ in range(maxiter):
             u, imat = exact_score_hessian(beta, X, y, strata, offset)
             if not np.isfinite(u).all() or not np.isfinite(imat).all():
                 break
             try:
+                cond = np.linalg.cond(imat)
                 delta = np.linalg.solve(imat, u)
             except np.linalg.LinAlgError:
                 break
-            beta += delta
-            if np.max(np.abs(delta)) < eps:
+            if not np.isfinite(delta).all() or cond > 1e12 or np.max(np.abs(delta)) > 50:
                 break
-        # Compute hess_inv as imat inverse
-        try:
-            hess_inv = np.linalg.inv(imat)
-        except:
-            hess_inv = None
-        success = True
-        message = "Exact Newton-Raphson converged"
-        params = beta
-        ll_model_fun = conditional_loglik(beta, X, y, strata, offset)
+            step = 1.0
+            new_ll = ll_model_fun
+            while step > 1e-4:
+                beta_new = beta + step * delta
+                new_ll = conditional_loglik(beta_new, X, y, strata, offset)
+                if np.isfinite(new_ll) and new_ll < ll_model_fun:
+                    break
+                step *= 0.5
+            if step <= 1e-4:
+                break
+            beta = beta_new
+            ll_model_fun = new_ll
+            if np.max(np.abs(step * delta)) < eps:
+                success = True
+                message = "Exact Newton-Raphson converged"
+                break
+        if success:
+            try:
+                hess_inv = np.linalg.inv(imat)
+            except:
+                hess_inv = None
+            params = beta
+        else:
+            args = (X, y, strata, offset)
+            result = minimize(conditional_loglik, initial_beta, args=args, method='L-BFGS-B')
+            params = result.x
+            success = result.success
+            message = f"Fallback to L-BFGS-B: {result.message}"
+            hess_inv = getattr(result, 'hess_inv', None)
+            if hess_inv is not None and hasattr(hess_inv, "todense"):
+                hess_inv = np.asarray(hess_inv.todense())
+            ll_model_fun = result.fun
     else:
         args = (X, y, strata, offset)
         result = minimize(conditional_loglik, initial_beta, args=args, method='L-BFGS-B')
@@ -259,6 +288,8 @@ def fit_clogit(X, y, strata, offset=None, initial_beta=None, exact_hessian=False
         success = result.success
         message = result.message
         hess_inv = getattr(result, 'hess_inv', None)
+        if hess_inv is not None and hasattr(hess_inv, "todense"):
+            hess_inv = np.asarray(hess_inv.todense())
         ll_model_fun = result.fun
 
     # Compute concordance
